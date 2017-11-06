@@ -17,7 +17,7 @@ import net.kenevans.android.androidsocketclient.R;
 
 public class Client extends Activity {
     private Socket socket;
-    private static final int SERVERPORT = 5000;
+    private static final int SERVERPORT = 6000;
     private static final String SERVER_IP = "10.0.2.2";
 
     @Override

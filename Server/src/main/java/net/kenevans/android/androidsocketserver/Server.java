@@ -147,7 +147,6 @@ public class Server extends Activity {
      */
     class ServerThread implements Runnable {
         public void run() {
-            Socket mClientSocket = null;
             try {
                 mServerSocket = new ServerSocket(SERVERPORT);
                 String info = mServerSocket.getInetAddress().getHostAddress();
@@ -177,7 +176,7 @@ public class Server extends Activity {
     }
 
     /**
-     * Handles communication form the client.
+     * Handles communication from the client.
      */
     class CommunicationThread implements Runnable {
         private BufferedReader mBufferedReader;
@@ -185,7 +184,7 @@ public class Server extends Activity {
         CommunicationThread(Socket clientSocket) {
             try {
                 this.mBufferedReader = new BufferedReader(new
-                        InputStreamReader(mClientSocket.getInputStream()));
+                        InputStreamReader(clientSocket.getInputStream()));
             } catch (IOException ex) {
                 mUpdateLogHandler.post(new PostLogMsgThread
                         ("Exception", ex.getMessage()));
