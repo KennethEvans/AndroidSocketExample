@@ -27,10 +27,11 @@ public class Server extends Activity {
     private Thread mServerThread;
     private TextView mText;
     private Handler mHandler;
+    private static boolean LONG_STATUS_INTERVAL_ONLY = true;
     private static final long STATUS_INTERVAL = 1000;
-    //    private static final long STATUS_INTERVAL_TOO_LONG =
-//            11 * STATUS_INTERVAL / 10;
-    private static final long STATUS_INTERVAL_TOO_LONG = 0;
+    private static final long STATUS_INTERVAL_TOO_LONG =
+            11 * STATUS_INTERVAL / 10;
+//    private static final long STATUS_INTERVAL_TOO_LONG = 0;
 
     private static final int SERVERPORT = 6000;
     private static final int MAX_TEXT_LENGTH = 50000;
@@ -201,9 +202,11 @@ public class Server extends Activity {
                 info += (connected ? "conn" : "unconn") + ",";
                 info += (closed ? "closed" : "open");
                 long deltaTime = mCurTime - mPrevTime;
-                if (deltaTime > STATUS_INTERVAL_TOO_LONG) {
-                    info += " !!! " + deltaTime + " ms";
-                    addMsg("Status: Client" + " [" + mId + "]", info);
+                if (LONG_STATUS_INTERVAL_ONLY) {
+                    if (deltaTime > STATUS_INTERVAL_TOO_LONG) {
+                        info += " !!! " + deltaTime + " ms";
+                        addMsg("Status: Client" + " [" + mId + "]", info);
+                    }
                 } else {
                     addMsg("Status: Client" + " [" + mId + "]", info);
                 }
