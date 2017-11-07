@@ -4,7 +4,6 @@ import android.app.Activity;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
-import android.os.Looper;
 import android.text.format.Formatter;
 import android.util.Log;
 import android.view.WindowManager;
@@ -27,6 +26,7 @@ public class Server extends Activity {
     private Handler mUpdateLogHandler;
     private Thread mServerThread;
     private TextView mText;
+    private Handler mHandler;
     private static final long STATUS_INTERVAL = 1000;
     //    private static final long STATUS_INTERVAL_TOO_LONG =
 //            11 * STATUS_INTERVAL / 10;
@@ -49,7 +49,8 @@ public class Server extends Activity {
         setContentView(R.layout.main);
         // Make it stay on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        mText = (TextView) findViewById(R.id.text2);
+        mText = findViewById(R.id.text2);
+        mHandler = new Handler();
         mUpdateLogHandler = new Handler();
         // Initialize the addMsg
         addMsg("Starting", "Local IP Address=" + getLocalIpAddress());
@@ -163,7 +164,6 @@ public class Server extends Activity {
         private Socket mClientSocket;
         private BufferedReader mClientIn;
         private PrintWriter mClientOut;
-        private Handler mHandler;
         private Runnable mCheckStatus;
         private long mCurTime;
         private long mPrevTime;
@@ -173,17 +173,13 @@ public class Server extends Activity {
             this.mClientSocket = clientSocket;
             mId = id;
 
-            // Necessary to run handler inside thread
-            Looper.prepare();
-
             // Start the timer
             mCurTime = mPrevTime = new Date().getTime();
-            mHandler = new Handler();
             mCheckStatus = new Runnable() {
                 @Override
                 public void run() {
                     try {
-                        updateSocketStatus();
+                        updateClientStatus();
                     } finally {
                         // 100% guarantee that this always happens, even if
                         // your update method throws an exception
@@ -193,23 +189,25 @@ public class Server extends Activity {
             };
         }
 
-        void updateSocketStatus() {
+        void updateClientStatus() {
             if (mClientSocket == null) return;
             String info = "";
-            boolean connected = mClientSocket.isConnected();
-            boolean closed = mClientSocket.isClosed();
-            info += (connected ? "connected" : "unconnected") + " ";
-            info += (closed ? "closed" : "open");
             // Check if interval is too long
             mPrevTime = mCurTime;
             mCurTime = new Date().getTime();
             if (mPrevTime != 0) {
+                boolean connected = mClientSocket.isConnected();
+                boolean closed = mClientSocket.isClosed();
+                info += (connected ? "conn" : "unconn") + ",";
+                info += (closed ? "closed" : "open");
                 long deltaTime = mCurTime - mPrevTime;
                 if (deltaTime > STATUS_INTERVAL_TOO_LONG) {
                     info += " !!! " + deltaTime + " ms";
+                    addMsg("Status: Client" + " [" + mId + "]", info);
+                } else {
+                    addMsg("Status: Client" + " [" + mId + "]", info);
                 }
             }
-            addMsg("Status: Client" + " [" + mId + "]", info);
         }
 
         void startTimer() {
@@ -235,24 +233,40 @@ public class Server extends Activity {
                 String inputLine;
                 while ((inputLine = mClientIn.readLine()) != null) {
                     addMsg("Client" + " [" + mId + "]", inputLine);
-                    if (inputLine.equals("?"))
+                    if (inputLine.equals("?")) {
                         mClientOut.println("Echo: " + "\"Bye.\" ends Client, " +
                                 "\"End Server.\" ends Server");
-                    if (inputLine.equals("Bye.")) {
+                    } else if (inputLine.equals("Bye.")) {
                         addMsg("Client" + " [" + mId + "]",
                                 "Closing per remote request");
                         break;
-                    }
-                    if (inputLine.equals("End Server.")) {
+                    } else if (inputLine.equals("End Server.")) {
 //                        serverContinue = false;
+                    } else {
+                        // Echo it
+                        mClientOut.println("Echo: " + inputLine);
                     }
                 }
-                mClientOut.close();
-                mClientIn.close();
-                mClientSocket.close();
-            } catch (IOException ex) {
+            } catch (
+                    IOException ex)
+
+            {
                 addMsg("Client Exception" + " [" + mId + "]", "Error in " +
                         "run()", ex);
+            } finally
+
+            {
+                try {
+                    mClientOut.close();
+                    mClientIn.close();
+                    mClientSocket.close();
+                    addMsg("Client" + " [" + mId + "]",
+                            "Socket closed");
+                } catch (Exception ex) {
+                    addMsg("Client Exception" + " [" + mId + "]",
+                            "Error closing socket");
+                }
+                stopTimer();
             }
         }
 
