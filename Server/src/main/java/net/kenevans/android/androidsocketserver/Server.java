@@ -13,6 +13,7 @@ import android.widget.TextView;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
@@ -27,8 +28,9 @@ public class Server extends Activity {
     private Thread mServerThread;
     private TextView mText;
     private static final long STATUS_INTERVAL = 1000;
-    private static final long STATUS_INTERVAL_TOO_LONG =
-            11 * STATUS_INTERVAL / 10;
+    //    private static final long STATUS_INTERVAL_TOO_LONG =
+//            11 * STATUS_INTERVAL / 10;
+    private static final long STATUS_INTERVAL_TOO_LONG = 0;
 
     private static final int SERVERPORT = 6000;
     private static final int MAX_TEXT_LENGTH = 50000;
@@ -138,7 +140,7 @@ public class Server extends Activity {
                     socket = mServerSocket.accept();
                     // Creates a new thread
                     String info = socket.getRemoteSocketAddress() +
-                            "to" + socket.getLocalSocketAddress();
+                            " to " + socket.getLocalSocketAddress();
                     addMsg("Starting Client", info);
                     ClientThread clientThread = new ClientThread(socket,
                             mNClients++);
@@ -159,7 +161,8 @@ public class Server extends Activity {
      */
     class ClientThread implements Runnable {
         private Socket mClientSocket;
-        private BufferedReader mBufferedReader;
+        private BufferedReader mClientIn;
+        private PrintWriter mClientOut;
         private Handler mHandler;
         private Runnable mCheckStatus;
         private long mCurTime;
@@ -188,16 +191,6 @@ public class Server extends Activity {
                     }
                 }
             };
-
-            // Create the reader
-            try {
-                this.mBufferedReader = new BufferedReader(new
-                        InputStreamReader(clientSocket.getInputStream()));
-            } catch (IOException ex) {
-                addMsg("Client Exception" + " [" + mId + "]", "Error creating" +
-                        " " +
-                        "reader", ex);
-            }
         }
 
         void updateSocketStatus() {
@@ -233,26 +226,33 @@ public class Server extends Activity {
 
         public void run() {
             startTimer();
-            while (!Thread.currentThread().isInterrupted()) {
-                try {
-                    String read = mBufferedReader.readLine();
-                    if (read != null) {
-                        addMsg("Client" + " [" + mId + "]", read);
+            try {
+                this.mClientIn = new BufferedReader(new
+                        InputStreamReader(mClientSocket.getInputStream()));
+                this.mClientOut = new PrintWriter(mClientSocket
+                        .getOutputStream(),
+                        true);
+                String inputLine;
+                while ((inputLine = mClientIn.readLine()) != null) {
+                    addMsg("Client" + " [" + mId + "]", inputLine);
+                    if (inputLine.equals("?"))
+                        mClientOut.println("Echo: " + "\"Bye.\" ends Client, " +
+                                "\"End Server.\" ends Server");
+                    if (inputLine.equals("Bye.")) {
+                        addMsg("Client" + " [" + mId + "]",
+                                "Closing per remote request");
+                        break;
                     }
-                } catch (IOException ex) {
-                    addMsg("Client Exception" + " [" + mId + "]", "Error in " +
-                            "run()", ex);
+                    if (inputLine.equals("End Server.")) {
+//                        serverContinue = false;
+                    }
                 }
-            }
-            // Clean up
-            stopTimer();
-            if (mBufferedReader != null) {
-                try {
-                    mBufferedReader.close();
-                    mBufferedReader = null;
-                } catch (Exception ex) {
-                    // Do nothing
-                }
+                mClientOut.close();
+                mClientIn.close();
+                mClientSocket.close();
+            } catch (IOException ex) {
+                addMsg("Client Exception" + " [" + mId + "]", "Error in " +
+                        "run()", ex);
             }
         }
 
