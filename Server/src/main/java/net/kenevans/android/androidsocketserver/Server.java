@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.os.Looper;
 import android.text.format.Formatter;
 import android.util.Log;
 import android.view.WindowManager;
@@ -12,27 +13,22 @@ import android.widget.TextView;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.InetAddress;
-import java.net.InetSocketAddress;
-import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Date;
-import java.util.Enumeration;
 import java.util.Locale;
 
 public class Server extends Activity {
+    private static final String TAG = "Server";
     private ServerSocket mServerSocket;
-    private Socket mClientSocket;
     private Handler mUpdateLogHandler;
     private Thread mServerThread;
     private TextView mText;
     private static final long STATUS_INTERVAL = 1000;
     private static final long STATUS_INTERVAL_TOO_LONG =
             11 * STATUS_INTERVAL / 10;
-    private Handler mHandler;
-    private Runnable mCheckStatus;
 
     private static final int SERVERPORT = 6000;
     private static final int MAX_TEXT_LENGTH = 50000;
@@ -41,8 +37,8 @@ public class Server extends Activity {
     private static final SimpleDateFormat mFormatter = new SimpleDateFormat
             (TIME_FORMAT, Locale.US);
 
-    private static long mCurTime;
-    private static long mPrevTime;
+    private ArrayList<ClientThread> mClientList = new ArrayList<>();
+    private int mNClients;
 
 
     @Override
@@ -53,73 +49,55 @@ public class Server extends Activity {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         mText = (TextView) findViewById(R.id.text2);
         mUpdateLogHandler = new Handler();
-        // Initialize the log
-        mUpdateLogHandler.post(new PostLogMsgThread
-                ("Starting", "Local IP Address=" + getLocalIpAddress()));
+        // Initialize the addMsg
+        addMsg("Starting", "Local IP Address=" + getLocalIpAddress());
 
         // Start the server thread
         this.mServerThread = new Thread(new ServerThread());
         this.mServerThread.start();
-
-        // Start the timer
-        mHandler = new Handler();
-        mCheckStatus = new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    updateSocketStatus();
-                } finally {
-                    // 100% guarantee that this always happens, even if
-                    // your update method throws an exception
-                    mHandler.postDelayed(mCheckStatus, STATUS_INTERVAL);
-                }
-            }
-        };
-        startTimer();
     }
 
     @Override
     protected void onDestroy() {
+        Log.d(TAG, this.getClass().getSimpleName() + ": onDestroy");
         super.onDestroy();
         try {
-            stopTimer();
             mServerSocket.close();
-        } catch (IOException ex) {
-            mUpdateLogHandler.post(new PostLogMsgThread("Exception",
-                    ex.getMessage()));
-        }
-    }
-
-    void updateSocketStatus() {
-        if (mClientSocket == null) return;
-        String info = "";
-        boolean connected = mClientSocket.isConnected();
-        boolean closed = mClientSocket.isClosed();
-        info += (connected ? "connected" : "unconnected") + " ";
-        info += (closed ? "closed" : "open");
-        // Check if interval is too long
-        mPrevTime = mCurTime;
-        mCurTime = new Date().getTime();
-        if (mPrevTime != 0) {
-            long deltaTime = mCurTime - mPrevTime;
-            if (deltaTime > STATUS_INTERVAL_TOO_LONG) {
-                info += " !!! " + deltaTime + " ms";
+            Socket clientSocket;
+            for (ClientThread thread : mClientList) {
+                clientSocket = thread.getClientSocket();
+                if (clientSocket != null && !clientSocket.isClosed()) {
+                    clientSocket.close();
+                }
             }
-        }
-        mUpdateLogHandler.post(new PostLogMsgThread
-                ("Status", info));
-    }
-
-    void startTimer() {
-        if (mCheckStatus != null) {
-            mCheckStatus.run();
+        } catch (IOException ex) {
+            addMsg("Exception", "Error closing sockets", ex);
+            Log.d(TAG, "Error closing sockets", ex);
         }
     }
 
-    void stopTimer() {
-        if (mHandler != null) {
-            mHandler.removeCallbacks(mCheckStatus);
-        }
+    void addMsg(final String prefix, final String msg) {
+        runOnUiThread(new Runnable() {
+            public void run() {
+                Date currentTime = new Date();
+                String timeString = mFormatter.format(currentTime);
+                CharSequence text = mText.getText();
+                int len = text.length();
+                // Don't let the text get too long
+                if (len > MAX_TEXT_LENGTH) {
+                    text = text.subSequence(0, ADJ_TEXT_LENGTH);
+                    mText.setText(timeString + " " + " Adjust: Text truncated" +
+                            " to "
+                            + ADJ_TEXT_LENGTH + " characters\n");
+                }
+                mText.setText(timeString + " " + prefix + ": " + msg + "\n" +
+                        text.toString());
+            }
+        });
+    }
+
+    void addMsg(final String prefix, final String msg, final Throwable t) {
+        addMsg(prefix, msg + ": " + "" + t.getMessage());
     }
 
     /**
@@ -136,8 +114,7 @@ public class Server extends Activity {
                     .getIpAddress());
         } catch (Exception ex) {
             ip = null;
-            mUpdateLogHandler.post(new PostLogMsgThread
-                    ("Exception", ex.getMessage()));
+            addMsg("Exception", "Error getting local IP address", ex);
         }
         return ip;
     }
@@ -147,93 +124,144 @@ public class Server extends Activity {
      */
     class ServerThread implements Runnable {
         public void run() {
+            Socket socket;
             try {
                 mServerSocket = new ServerSocket(SERVERPORT);
                 String info = mServerSocket.getInetAddress().getHostAddress();
                 info += " " + mServerSocket.getLocalPort();
-                mUpdateLogHandler.post(new PostLogMsgThread
-                        ("Server Socket", info));
+                addMsg("Server Socket", info);
             } catch (IOException ex) {
-                mUpdateLogHandler.post(new PostLogMsgThread
-                        ("Exception", ex.getMessage()));
+                addMsg("Server Exception", "Error setting up server", ex);
             }
             while (!Thread.currentThread().isInterrupted()) {
                 try {
-                    mClientSocket = mServerSocket.accept();
-                    CommunicationThread commThread = new CommunicationThread
-                            (mClientSocket);
-                    new Thread(commThread).start();
-                    String info = mClientSocket.getRemoteSocketAddress() +
-                            "to" + mClientSocket.getLocalSocketAddress();
-                    mUpdateLogHandler.post(new PostLogMsgThread
-                            ("Client Socket", info));
+                    socket = mServerSocket.accept();
+                    // Creates a new thread
+                    String info = socket.getRemoteSocketAddress() +
+                            "to" + socket.getLocalSocketAddress();
+                    addMsg("Starting Client", info);
+                    ClientThread clientThread = new ClientThread(socket,
+                            mNClients++);
+                    mClientList.add(clientThread);
+                    // Runs the thread (calls its run method)
+                    new Thread(clientThread).start();
                 } catch (IOException ex) {
-                    mUpdateLogHandler.post(new PostLogMsgThread
-                            ("Exception", ex.getMessage()));
+                    addMsg("Server Exception", "IO Error", ex);
+                } catch (Exception ex) {
+                    addMsg("Server Exception", "Unexpected Error", ex);
                 }
             }
         }
     }
 
     /**
-     * Handles communication from the client.
+     * Handles a client.
      */
-    class CommunicationThread implements Runnable {
+    class ClientThread implements Runnable {
+        private Socket mClientSocket;
         private BufferedReader mBufferedReader;
+        private Handler mHandler;
+        private Runnable mCheckStatus;
+        private long mCurTime;
+        private long mPrevTime;
+        private int mId;
 
-        CommunicationThread(Socket clientSocket) {
+        ClientThread(Socket clientSocket, int id) {
+            this.mClientSocket = clientSocket;
+            mId = id;
+
+            // Necessary to run handler inside thread
+            Looper.prepare();
+
+            // Start the timer
+            mCurTime = mPrevTime = new Date().getTime();
+            mHandler = new Handler();
+            mCheckStatus = new Runnable() {
+                @Override
+                public void run() {
+                    try {
+                        updateSocketStatus();
+                    } finally {
+                        // 100% guarantee that this always happens, even if
+                        // your update method throws an exception
+                        mHandler.postDelayed(mCheckStatus, STATUS_INTERVAL);
+                    }
+                }
+            };
+
+            // Create the reader
             try {
                 this.mBufferedReader = new BufferedReader(new
                         InputStreamReader(clientSocket.getInputStream()));
             } catch (IOException ex) {
-                mUpdateLogHandler.post(new PostLogMsgThread
-                        ("Exception", ex.getMessage()));
+                addMsg("Client Exception" + " [" + mId + "]", "Error creating" +
+                        " " +
+                        "reader", ex);
+            }
+        }
+
+        void updateSocketStatus() {
+            if (mClientSocket == null) return;
+            String info = "";
+            boolean connected = mClientSocket.isConnected();
+            boolean closed = mClientSocket.isClosed();
+            info += (connected ? "connected" : "unconnected") + " ";
+            info += (closed ? "closed" : "open");
+            // Check if interval is too long
+            mPrevTime = mCurTime;
+            mCurTime = new Date().getTime();
+            if (mPrevTime != 0) {
+                long deltaTime = mCurTime - mPrevTime;
+                if (deltaTime > STATUS_INTERVAL_TOO_LONG) {
+                    info += " !!! " + deltaTime + " ms";
+                }
+            }
+            addMsg("Status: Client" + " [" + mId + "]", info);
+        }
+
+        void startTimer() {
+            if (mCheckStatus != null && mCheckStatus != null) {
+                mCheckStatus.run();
+            }
+        }
+
+        void stopTimer() {
+            if (mHandler != null && mCheckStatus != null) {
+                mHandler.removeCallbacks(mCheckStatus);
             }
         }
 
         public void run() {
+            startTimer();
             while (!Thread.currentThread().isInterrupted()) {
                 try {
                     String read = mBufferedReader.readLine();
-                    mUpdateLogHandler.post(new PostLogMsgThread(read));
+                    if (read != null) {
+                        addMsg("Client" + " [" + mId + "]", read);
+                    }
                 } catch (IOException ex) {
-                    mUpdateLogHandler.post(new PostLogMsgThread
-                            ("Exception", ex.getMessage()));
+                    addMsg("Client Exception" + " [" + mId + "]", "Error in " +
+                            "run()", ex);
+                }
+            }
+            // Clean up
+            stopTimer();
+            if (mBufferedReader != null) {
+                try {
+                    mBufferedReader.close();
+                    mBufferedReader = null;
+                } catch (Exception ex) {
+                    // Do nothing
                 }
             }
         }
-    }
 
-    /**
-     * Sends a message to be added to the log.
-     */
-    class PostLogMsgThread implements Runnable {
-        private String mMsg;
-        private String mPrefix = "Client Says";
-
-        PostLogMsgThread(String str) {
-            this.mMsg = str;
+        public Socket getClientSocket() {
+            return mClientSocket;
         }
 
-        PostLogMsgThread(String prefix, String str) {
-            this.mPrefix = prefix;
-            this.mMsg = str;
-        }
-
-        @Override
-        public void run() {
-            Date currentTime = new Date();
-            String timeString = mFormatter.format(currentTime);
-            CharSequence text = mText.getText();
-            int len = text.length();
-            // Don't let it get too long
-            if (len > MAX_TEXT_LENGTH) {
-                text = text.subSequence(0, ADJ_TEXT_LENGTH);
-                mText.setText(timeString + " " + " Adjust: Text truncated to "
-                        + ADJ_TEXT_LENGTH + " characters\n");
-            }
-            mText.setText(timeString + " " + mPrefix + ": " + mMsg + "\n" +
-                    text.toString());
+        public int getId() {
+            return mId;
         }
     }
 }
