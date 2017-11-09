@@ -6,6 +6,9 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.text.format.Formatter;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuInflater;
+import android.view.MenuItem;
 import android.view.WindowManager;
 import android.widget.TextView;
 
@@ -52,6 +55,7 @@ public class Server extends Activity {
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
+        Log.d(TAG, this.getClass().getSimpleName() + ": onCreate");
         super.onCreate(savedInstanceState);
         setContentView(R.layout.main);
         // Make it stay on
@@ -71,6 +75,42 @@ public class Server extends Activity {
     protected void onDestroy() {
         Log.d(TAG, this.getClass().getSimpleName() + ": onDestroy");
         super.onDestroy();
+        shutdown();
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        MenuInflater inflater = getMenuInflater();
+        inflater.inflate(R.menu.main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        int id = item.getItemId();
+        switch (id) {
+            case R.id.shutdown:
+                shutdown();
+                return true;
+            case R.id.restart:
+                restart();
+                return true;
+            case R.id.exit:
+                //shutdown();
+                finish();
+                return true;
+       }
+        return false;
+    }
+
+    void restart() {
+        shutdown();
+        // Start the server thread
+        this.mServerThread = new Thread(new ServerThread());
+        this.mServerThread.start();
+    }
+
+    void shutdown() {
         mHandler.removeCallbacksAndMessages(null);
         try {
             Socket clientSocket;
@@ -166,8 +206,14 @@ public class Server extends Activity {
                     new Thread(clientThread).start();
                 } catch (IOException ex) {
                     addMsg("Server Exception", "IO Error", ex);
+                    if(mServerSocket == null || mServerSocket.isClosed()) {
+                        break;
+                    }
                 } catch (Exception ex) {
                     addMsg("Server Exception", "Unexpected Error", ex);
+                    if(mServerSocket == null || mServerSocket.isClosed()) {
+                        break;
+                    }
                 }
             }
         }

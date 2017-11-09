@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
     <string name="app_name">Android Socket Server</string>
     <string name="action_settings">Settings</string>
     <string name="hello_world">Hello world!</string>
-
+    <string name="shutdown_item">Shut Down Server</string>
+    <string name="restart_item">Restart Server</string>
+    <string name="exit_item">Exit</string>
 </resources>
