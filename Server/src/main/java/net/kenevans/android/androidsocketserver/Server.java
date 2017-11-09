@@ -99,10 +99,13 @@ public class Server extends Activity {
                 //shutdown();
                 finish();
                 return true;
-       }
+        }
         return false;
     }
 
+    /**
+     * Shuts down the server then restarts it.
+     */
     void restart() {
         shutdown();
         // Start the server thread
@@ -110,6 +113,9 @@ public class Server extends Activity {
         this.mServerThread.start();
     }
 
+    /**
+     * Shuts down the server, closing all resources
+     */
     void shutdown() {
         mHandler.removeCallbacksAndMessages(null);
         try {
@@ -135,6 +141,12 @@ public class Server extends Activity {
         }
     }
 
+    /**
+     * Adds a message of the form "prefix: msg" to the output.
+     *
+     * @param prefix The prefix.
+     * @param msg    The message.
+     */
     void addMsg(final String prefix, final String msg) {
         Date currentTime = new Date();
         final String timeString = mFormatter.format(currentTime);
@@ -155,6 +167,14 @@ public class Server extends Activity {
         });
     }
 
+    /**
+     * Adds t.getMsg() to the message and calls addMsg.
+     *
+     * @param prefix The prefix.
+     * @param msg The message.
+     * @param t The Throwable (super class of Exception).
+     * @see #addMsg(String, String)
+     */
     void addMsg(final String prefix, final String msg, final Throwable t) {
         addMsg(prefix, msg + ": " + "" + t.getMessage());
     }
@@ -206,12 +226,12 @@ public class Server extends Activity {
                     new Thread(clientThread).start();
                 } catch (IOException ex) {
                     addMsg("Server Exception", "IO Error", ex);
-                    if(mServerSocket == null || mServerSocket.isClosed()) {
+                    if (mServerSocket == null || mServerSocket.isClosed()) {
                         break;
                     }
                 } catch (Exception ex) {
                     addMsg("Server Exception", "Unexpected Error", ex);
-                    if(mServerSocket == null || mServerSocket.isClosed()) {
+                    if (mServerSocket == null || mServerSocket.isClosed()) {
                         break;
                     }
                 }
@@ -303,27 +323,18 @@ public class Server extends Activity {
                         String timeStr = inputLine.substring(0, TIME_FORMAT
                                 .length());
                         try {
+                            // We need to account for the fact our
+                            // timestamps don't have dates in them, thus
+                            // represent time since the start time, which is
+                            // Date(0) but is UTC time.  00:00:00.000 is not
+                            // Date(0) but differences should be ok.
+                            Date currentTime = new Date();
+                            final String timeString = mFormatter.format
+                                    (currentTime);
+                            Date nowDate = mFormatter.parse(timeString);
                             Date sentDate = mFormatter.parse(inputLine);
-                            Date sentDateMidnight = mFormatter.parse
-                                    ("00:00:00.000");
-                            // Our timestamp does not have a day, so it
-                            // represents the time since midnight.  Need to
-                            // get the time since midnight for time now.
-                            long now = new Date().getTime();
-                            Calendar midnightCal = new GregorianCalendar();
-                            midnightCal.set(Calendar.HOUR_OF_DAY, 0);
-                            midnightCal.set(Calendar.MINUTE, 0);
-                            midnightCal.set(Calendar.SECOND, 0);
-                            midnightCal.set(Calendar.MILLISECOND, 0);
-                            Calendar sentCal = new GregorianCalendar();
-                            sentCal.setTime(sentDate);
-                            long midnightTime = midnightCal.getTimeInMillis();
-                            // Date(0) is is January 1, 1970 in UTC. Our
-                            // timezone is not UTC so have to subtract midnight.
-                            long sentTime = sentDate.getTime();
-                            long sentTimeMidnight = sentDateMidnight.getTime();
-                            long deltaTime = now - midnightTime - (sentTime -
-                                    sentTimeMidnight);
+                            long deltaTime = nowDate.getTime() - sentDate
+                                    .getTime();
                             addMsg("Client" + " [" + mId + "]", inputLine
                                     + " " + deltaTime + " ms");
                             mClientOut.println("Echo: " + inputLine
