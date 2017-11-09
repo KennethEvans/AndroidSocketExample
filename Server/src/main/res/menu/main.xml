@@ -9,5 +9,6 @@
         android:title="@string/action_settings"/>
     <item android:id="@+id/shutdown" android:title="@string/shutdown_item" />
     <item android:id="@+id/restart" android:title="@string/restart_item" />
+    <item android:id="@+id/save" android:title="@string/save_item" />
     <item android:id="@+id/exit" android:title="@string/exit_item" />
 </menu>

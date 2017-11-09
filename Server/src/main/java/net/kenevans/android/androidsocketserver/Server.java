@@ -1,8 +1,12 @@
 package net.kenevans.android.androidsocketserver;
 
 import android.app.Activity;
+import android.content.Intent;
+import android.graphics.Bitmap;
+import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Bundle;
+import android.os.Environment;
 import android.os.Handler;
 import android.text.format.Formatter;
 import android.util.Log;
@@ -11,8 +15,13 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.WindowManager;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintWriter;
@@ -39,6 +48,10 @@ public class Server extends Activity {
     private static final long STATUS_INTERVAL_TOO_LONG =
             11 * STATUS_INTERVAL / 10;
 //    private static final long STATUS_INTERVAL_TOO_LONG = 0;
+
+    private static final String sdCardFileNameTemplate =
+            "AndroidSocketExample.%s" +
+            ".txt";
 
     private static final int SERVERPORT = 6000;
     private static final int MAX_TEXT_LENGTH = 50000;
@@ -94,6 +107,9 @@ public class Server extends Activity {
                 return true;
             case R.id.restart:
                 restart();
+                return true;
+            case R.id.save:
+                save();
                 return true;
             case R.id.exit:
                 //shutdown();
@@ -171,8 +187,8 @@ public class Server extends Activity {
      * Adds t.getMsg() to the message and calls addMsg.
      *
      * @param prefix The prefix.
-     * @param msg The message.
-     * @param t The Throwable (super class of Exception).
+     * @param msg    The message.
+     * @param t      The Throwable (super class of Exception).
      * @see #addMsg(String, String)
      */
     void addMsg(final String prefix, final String msg, final Throwable t) {
@@ -196,6 +212,43 @@ public class Server extends Activity {
             addMsg("Exception", "Error getting local IP address", ex);
         }
         return ip;
+    }
+
+    /**
+     * Saves the output to the SD card
+     */
+    private void save() {
+        BufferedWriter out = null;
+        try {
+            File sdCardRoot = Environment.getExternalStorageDirectory();
+            if (sdCardRoot.canWrite()) {
+                String format = "yyyy-MM-dd-HHmmss";
+                SimpleDateFormat formatter = new SimpleDateFormat(format,
+                        Locale.US);
+                Date now = new Date();
+                String fileName = String.format(sdCardFileNameTemplate,
+                        formatter.format(now));
+                File file = new File(sdCardRoot, fileName);
+                FileWriter writer = new FileWriter(file);
+                out = new BufferedWriter(writer);
+                CharSequence charSeq = mText.getText();
+                out.write(charSeq.toString());
+                if (charSeq.length() == 0) {
+                    addMsg("save", "The file written is empty");
+                }
+                addMsg("Save", "Wrote " + fileName);
+            } else {
+                addMsg("Save", "Cannot write to SD card");
+            }
+        } catch (Exception ex) {
+            addMsg("Save", "Error saving to SD card", ex);
+        } finally {
+            try {
+                if (out != null) out.close();
+            } catch (Exception ex) {
+                // Do nothing
+            }
+        }
     }
 
     /**

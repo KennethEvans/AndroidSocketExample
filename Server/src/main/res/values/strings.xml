@@ -5,5 +5,6 @@
     <string name="hello_world">Hello world!</string>
     <string name="shutdown_item">Shut Down Server</string>
     <string name="restart_item">Restart Server</string>
+    <string name="save_item">Save output</string>
     <string name="exit_item">Exit</string>
 </resources>
