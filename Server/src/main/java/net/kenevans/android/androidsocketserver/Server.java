@@ -51,7 +51,7 @@ public class Server extends Activity {
 
     private static final String sdCardFileNameTemplate =
             "AndroidSocketExample.%s" +
-            ".txt";
+                    ".txt";
 
     private static final int SERVERPORT = 6000;
     private static final int MAX_TEXT_LENGTH = 50000;
@@ -404,12 +404,15 @@ public class Server extends Activity {
                                 "\"End Server.\" ends Server");
                     } else if (inputLine.equals("Bye.")) {
                         addMsg("Client" + " [" + mId + "]",
-                                "Closing per remote request");
+                                "Closing client per remote request");
                         // Note: break causes it to finish the loop and close
                         // the socket
                         break;
                     } else if (inputLine.equals("End Server.")) {
-//                        serverContinue = false;
+                        addMsg("Client" + " [" + mId + "]",
+                                "Closing server per remote request");
+                        shutdown();
+                        break;
                     } else {
                         // Echo it
                         mClientOut.println("Echo: " + inputLine);
