@@ -373,7 +373,7 @@ public class Server extends Activity {
                     Pattern p = Pattern.compile(TIME_FORMAT_PATTERN);
                     Matcher m = p.matcher(inputLine);
                     if (m.find()) {
-                        String timeStr = inputLine.substring(0, TIME_FORMAT
+                        String sentString = inputLine.substring(0, TIME_FORMAT
                                 .length());
                         try {
                             // We need to account for the fact our
@@ -382,12 +382,20 @@ public class Server extends Activity {
                             // Date(0) but is UTC time.  00:00:00.000 is not
                             // Date(0) but differences should be ok.
                             Date currentTime = new Date();
-                            final String timeString = mFormatter.format
+                            final String nowString = mFormatter.format
                                     (currentTime);
-                            Date nowDate = mFormatter.parse(timeString);
-                            Date sentDate = mFormatter.parse(inputLine);
+                            Date nowDate = mFormatter.parse(nowString);
+                            Date sentDate = mFormatter.parse(sentString);
                             long deltaTime = nowDate.getTime() - sentDate
                                     .getTime();
+                            Log.d(TAG, "currentTime=" + currentTime
+                                    + "\n nowString=" + nowString
+                                    + "\n sentString=" + sentString
+                                    + "\n deltaTime=" + deltaTime);
+//                            Log.d(TAG, "currentTime=" + currentTime
+//                                    + "\n nowDate=" + nowDate
+//                                    + "\n sentDate=" + sentDate
+//                                    + "\n deltaTime=" + deltaTime);
                             addMsg("Client" + " [" + mId + "]", inputLine
                                     + " " + deltaTime + " ms");
                             mClientOut.println("Echo: " + inputLine
@@ -395,7 +403,7 @@ public class Server extends Activity {
                             continue;
                         } catch (Exception ex) {
                             addMsg("Client Exception" + " [" + mId + "]",
-                                    "Error parsing timestamp; " + timeStr);
+                                    "Error parsing timestamp; " + sentString);
                         }
                     }
                     addMsg("Client" + " [" + mId + "]", inputLine);
